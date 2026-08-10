@@ -89,7 +89,7 @@ export default {
         );
       }
 
-      // 4. Gemini 1.5 Flash API Script Generator (Textbook Notes Mode)
+      // 4. Gemini API Script Generator (Robust Textbook Mode)
       if (pathname === "/api/generate-ai-script" && request.method === "POST") {
         const { topic, subjectName } = await request.json();
 
@@ -104,49 +104,47 @@ export default {
 
         if (!apiKey) {
           return Response.json(
-            { success: false, error: "GEMINI_API_KEY binding is missing in Cloudflare Worker settings." },
+            { success: false, error: "GEMINI_API_KEY environment variable is missing." },
             { status: 500, headers: corsHeaders }
           );
         }
 
-        const prompt = `You are a master Senior Secondary School teacher for de-blaise-tutorials preparing students for WAEC and NECO exams.
-Write a comprehensive, textbook-grade lesson on the topic "${topic}" under the subject "${subjectName}".
+        const prompt = `You are a Senior Secondary School teacher for de-blaise-tutorials preparing students for WAEC and NECO exams.
+Write a comprehensive, textbook-grade lesson note on the topic "${topic}" under "${subjectName}".
 
-Write complete, thorough educational content that students can copy directly into their notebooks. Include actual definitions, real classifications/types, detailed worked numerical examples/case studies, formulas, and WAEC exam tips.
+Requirements:
+- Write actual detailed definitions, real types/classifications, complete worked examples/case studies, and exam tips.
+- Provide full content so students can copy complete notes into their notebooks.
 
-The lesson MUST be divided into EXACTLY 4 teaching steps separated by the tag "===STEP===".
+Divide your teaching strictly into 4 steps using the tag "===STEP===" between each step.
 
-Follow this structure EXACTLY:
+Format each step like this:
 
-SPOKEN: Welcome students! Today we are studying ${topic} under ${subjectName}. Let's write down the lesson header.
+SPOKEN: [Teacher spoken explanation]
 BOARD:
-SUBJECT: ${subjectName}
-TOPIC: ${topic}
-CLASS: SS1 - SS3 (WAEC/NECO Standard)
+[Full detailed textbook notes for chalkboard]
+
 ===STEP===
-SPOKEN: First, let's establish the complete formal definition and foundational rules of ${topic}.
+
+SPOKEN: [Teacher spoken explanation for definitions]
 BOARD:
-1. FORMAL DEFINITION & FOUNDATIONAL PRINCIPLES:
-[Write the exact, full textbook definition with key technical terms explained in detail]
+1. DEFINITION & OVERVIEW
+[Write complete, detailed textbook definition and foundational rules]
+
 ===STEP===
-SPOKEN: Now, let's examine the main classifications, types, or key components you must memorize for your exam.
+
+SPOKEN: [Teacher spoken explanation for classifications/types]
 BOARD:
-2. TYPES & CLASSIFICATIONS:
-- [Type 1 Name]: Detailed description and characteristics
-- [Type 2 Name]: Detailed description and characteristics
-- [Type 3 Name]: Detailed description and characteristics
+2. TYPES & CLASSIFICATIONS
+- [Type 1]: Full description and details
+- [Type 2]: Full description and details
+
 ===STEP===
-SPOKEN: Let's solve a real, worked examination example step-by-step so you see how WAEC examiners grade this topic.
+
+SPOKEN: [Teacher spoken explanation for practical/worked example]
 BOARD:
-3. WORKED EXAMPLE & STEP-BY-STEP SOLUTION:
-[Provide actual equations, numbers, steps, or realistic scenario analysis]
-===STEP===
-SPOKEN: To wrap up today's lesson, here is a quick summary and common student pitfalls to avoid in WAEC/NECO examinations.
-BOARD:
-4. WAEC/NECO EXAMINATION SUMMARY:
-- Key formulas or rules to remember
-- Common student mistakes in exams
-- Practice past questions on CBT Practice Engine`;
+3. WORKED EXAMPLE / PRACTICAL APPLICATION
+[Full step-by-step example with numbers, equations, or analysis]`;
 
         try {
           const geminiRes = await fetch(
@@ -158,7 +156,7 @@ BOARD:
                 contents: [{ parts: [{ text: prompt }] }],
                 generationConfig: {
                   temperature: 0.2,
-                  maxOutputTokens: 3000
+                  maxOutputTokens: 2500
                 }
               })
             }
@@ -166,23 +164,39 @@ BOARD:
 
           const data = await geminiRes.json();
 
-          if (!data.candidates || !data.candidates[0].content.parts[0].text) {
-            throw new Error("Invalid response structure from Gemini API");
+          if (!data.candidates || !data.candidates[0] || !data.candidates[0].content) {
+            console.error("Gemini API Error Response:", JSON.stringify(data));
+            throw new Error(data.error ? data.error.message : "Invalid Gemini API Response");
           }
 
-          const rawResponse = data.candidates[0].content.parts[0].text;
+          const rawText = data.candidates[0].content.parts[0].text;
+          let steps = [];
 
-          // Robust delimiter parsing that never breaks on long JSON text
-          const stepBlocks = rawResponse.split("===STEP===");
-          const steps = stepBlocks.map(block => {
-            const spokenMatch = block.match(/SPOKEN:\s*([\s\S]*?)(?=BOARD:|$)/i);
-            const boardMatch = block.match(/BOARD:\s*([\s\S]*?)$/i);
+          if (rawText.includes("===STEP===")) {
+            const stepBlocks = rawText.split("===STEP===");
+            steps = stepBlocks.map(block => {
+              const spokenMatch = block.match(/SPOKEN:\s*([\s\S]*?)(?=BOARD:|$)/i);
+              const boardMatch = block.match(/BOARD:\s*([\s\S]*?)$/i);
 
-            return {
-              spokenText: spokenMatch ? spokenMatch[1].trim() : `Let's examine ${topic}.`,
-              chalkboardAction: boardMatch ? boardMatch[1].trim() : `${topic} Notes`
-            };
-          });
+              return {
+                spokenText: spokenMatch ? spokenMatch[1].trim() : `Let's examine ${topic}.`,
+                chalkboardAction: boardMatch ? boardMatch[1].trim() : block.trim()
+              };
+            }).filter(s => s.chalkboardAction.length > 5);
+          } else {
+            // Fallback split by double line breaks if model omitted ===STEP===
+            const chunks = rawText.split("\n\n");
+            steps = [
+              {
+                spokenText: `Welcome to class! Today we are studying ${topic} in ${subjectName}.`,
+                chalkboardAction: `SUBJECT: ${subjectName}\nTOPIC: ${topic}\n\n${chunks.slice(0, 2).join("\n\n")}`
+              },
+              {
+                spokenText: `Let's break down the details for ${topic}.`,
+                chalkboardAction: chunks.slice(2).join("\n\n") || rawText
+              }
+            ];
+          }
 
           return Response.json(
             { success: true, topic, subjectName, chalkboardScript: steps },
@@ -190,9 +204,9 @@ BOARD:
           );
 
         } catch (err) {
-          console.error("Gemini API Error:", err);
+          console.error("Gemini Execution Error:", err);
           return Response.json(
-            { success: false, error: "Failed to generate lesson content.", details: err.message },
+            { success: false, error: err.message },
             { status: 500, headers: corsHeaders }
           );
         }
