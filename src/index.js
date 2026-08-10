@@ -89,42 +89,39 @@ export default {
         );
       }
 
-      // 4. Gemini API Lesson Generator (Comprehensive Textbook Notes)
+      // 4. Groq Cloud AI Lesson Note Generator
       if (pathname === "/api/generate-ai-script" && request.method === "POST") {
         const { topic, subjectName } = await request.json();
 
         if (!topic || !subjectName) {
           return Response.json(
-            { success: false, error: "Missing 'topic' or 'subjectName' in body." },
+            { success: false, error: "Missing 'topic' or 'subjectName' in request body." },
             { status: 400, headers: corsHeaders }
           );
         }
 
-        const apiKey = env.GEMINI_API_KEY;
+        const apiKey = env.GROQ_API_KEY;
 
         if (!apiKey) {
           return Response.json(
-            { success: false, error: "GEMINI_API_KEY is missing from Cloudflare environment variables." },
+            { success: false, error: "GROQ_API_KEY variable is missing in Cloudflare Worker settings." },
             { status: 500, headers: corsHeaders }
           );
         }
 
-        const prompt = `You are a Senior Secondary School teacher writing a complete, detailed textbook lesson for WAEC and NECO students on "${topic}" under "${subjectName}".
+        const prompt = `You are a master Senior Secondary School teacher for de-blaise-tutorials preparing students for WAEC and NECO national examinations.
+Write a comprehensive, textbook-grade lesson note on "${topic}" under "${subjectName}".
 
-Write comprehensive, exhaustive notes that students can directly copy into their exercise books. Do NOT summarize or use generic statements.
+Requirements:
+- Write out actual, detailed educational content so students can copy complete, exhaustive notes directly into their notebooks.
+- Include complete formal definitions, real classifications/types with thorough descriptions, detailed features, fully worked numerical examples or step-by-step case studies, and key WAEC/NECO exam tips.
+- Do NOT use placeholders, generic text, or summaries.
 
-Include:
-1. Complete, formal textbook definition of ${topic} with detailed explanation of key technical terms.
-2. Complete list of all types, classifications, or forms with thorough descriptions for each.
-3. Detailed features, advantages, disadvantages, or key rules.
-4. A full practical worked example, step-by-step case study, or mathematical calculation.
-5. Key WAEC/NECO examination tips and common mistakes to avoid.
+Divide your teaching strictly into 4 steps using the exact tag "===STEP===" as the separator between steps.
 
-Divide your output strictly into 4 steps using "===STEP===" as the separator.
+Format each step strictly like this:
 
-Format each step like this:
-
-SPOKEN: Welcome students! Today we are studying ${topic} in ${subjectName}.
+SPOKEN: Welcome students! Today we are studying ${topic} under ${subjectName}.
 BOARD:
 SUBJECT: ${subjectName}
 TOPIC: ${topic}
@@ -132,56 +129,56 @@ CLASS: SS1 - SS3 (WAEC/NECO Syllabus)
 
 ===STEP===
 
-SPOKEN: Let's begin with the formal definition and fundamental concepts.
+SPOKEN: Let's begin with the formal textbook definition and foundational concepts.
 BOARD:
-1. DEFINITION & OVERVIEW OF ${topic.toUpperCase()}:
-[Write full, thorough textbook notes here]
+1. FORMAL DEFINITION & OVERVIEW OF ${topic.toUpperCase()}:
+[Write full, thorough textbook notes here with technical terms explained in detail]
 
 ===STEP===
 
-SPOKEN: Now let's detail the types, classifications, and features.
+SPOKEN: Now let's detail the main types, classifications, and key characteristics.
 BOARD:
-2. TYPES & CLASSIFICATIONS:
-[Write complete lists with detailed descriptions here]
+2. TYPES, CLASSIFICATIONS & FEATURES:
+- [Type 1 Name]: Detailed explanation and characteristics
+- [Type 2 Name]: Detailed explanation and characteristics
+- [Type 3 Name]: Detailed explanation and characteristics
 
 ===STEP===
 
-SPOKEN: Let's work through an examination example step-by-step.
+SPOKEN: Let's work through a practical examination example or calculation step-by-step.
 BOARD:
-3. WORKED EXAMPLE & EXAM ANALYSIS:
-[Write full step-by-step worked calculation or case study here]`;
+3. WORKED EXAMPLE / PRACTICAL ANALYSIS:
+[Write a complete step-by-step worked calculation, formula application, or realistic case study]`;
 
         try {
-          // Gemini API Call (Supports key as URL parameter)
-          const endpointUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
-
-          const geminiRes = await fetch(endpointUrl, {
+          const groqRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: {
+              "Authorization": `Bearer ${apiKey}`,
+              "Content-Type": "application/json"
+            },
             body: JSON.stringify({
-              contents: [{ parts: [{ text: prompt }] }],
-              generationConfig: {
-                temperature: 0.2,
-                maxOutputTokens: 3000
-              }
+              model: "llama-3.3-70b-versatile",
+              messages: [{ role: "user", content: prompt }],
+              temperature: 0.2,
+              max_tokens: 3000
             })
           });
 
-          const data = await geminiRes.json();
+          const data = await groqRes.json();
 
-          // If Google returns an error response, report it directly!
-          if (!geminiRes.ok || data.error) {
-            console.error("Gemini API Error:", JSON.stringify(data));
+          if (!groqRes.ok || data.error) {
+            console.error("Groq API Error:", JSON.stringify(data));
             return Response.json(
               { 
                 success: false, 
-                error: `Google API Error (${geminiRes.status}): ${data.error ? data.error.message : "Authentication or request failed"}` 
+                error: `Groq API Error (${groqRes.status}): ${data.error ? data.error.message : "Request failed"}` 
               },
               { status: 500, headers: corsHeaders }
             );
           }
 
-          const rawText = data.candidates[0].content.parts[0].text;
+          const rawText = data.choices[0].message.content;
           let steps = [];
 
           if (rawText.includes("===STEP===")) {
@@ -216,7 +213,7 @@ BOARD:
 
         } catch (err) {
           return Response.json(
-            { success: false, error: `Worker Execution Error: ${err.message}` },
+            { success: false, error: `Execution Error: ${err.message}` },
             { status: 500, headers: corsHeaders }
           );
         }
