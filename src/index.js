@@ -89,7 +89,7 @@ export default {
         );
       }
 
-      // 4. Native Cloudflare Workers AI Script Generator (Textbook Mode)
+      // 4. Gemini 1.5 Flash API Script Generator (Textbook Notes Mode)
       if (pathname === "/api/generate-ai-script" && request.method === "POST") {
         const { topic, subjectName } = await request.json();
 
@@ -100,98 +100,102 @@ export default {
           );
         }
 
-        let steps = [];
+        const apiKey = env.GEMINI_API_KEY;
+
+        if (!apiKey) {
+          return Response.json(
+            { success: false, error: "GEMINI_API_KEY binding is missing in Cloudflare Worker settings." },
+            { status: 500, headers: corsHeaders }
+          );
+        }
+
+        const prompt = `You are a master Senior Secondary School teacher for de-blaise-tutorials preparing students for WAEC and NECO exams.
+Write a comprehensive, textbook-grade lesson on the topic "${topic}" under the subject "${subjectName}".
+
+Write complete, thorough educational content that students can copy directly into their notebooks. Include actual definitions, real classifications/types, detailed worked numerical examples/case studies, formulas, and WAEC exam tips.
+
+The lesson MUST be divided into EXACTLY 4 teaching steps separated by the tag "===STEP===".
+
+Follow this structure EXACTLY:
+
+SPOKEN: Welcome students! Today we are studying ${topic} under ${subjectName}. Let's write down the lesson header.
+BOARD:
+SUBJECT: ${subjectName}
+TOPIC: ${topic}
+CLASS: SS1 - SS3 (WAEC/NECO Standard)
+===STEP===
+SPOKEN: First, let's establish the complete formal definition and foundational rules of ${topic}.
+BOARD:
+1. FORMAL DEFINITION & FOUNDATIONAL PRINCIPLES:
+[Write the exact, full textbook definition with key technical terms explained in detail]
+===STEP===
+SPOKEN: Now, let's examine the main classifications, types, or key components you must memorize for your exam.
+BOARD:
+2. TYPES & CLASSIFICATIONS:
+- [Type 1 Name]: Detailed description and characteristics
+- [Type 2 Name]: Detailed description and characteristics
+- [Type 3 Name]: Detailed description and characteristics
+===STEP===
+SPOKEN: Let's solve a real, worked examination example step-by-step so you see how WAEC examiners grade this topic.
+BOARD:
+3. WORKED EXAMPLE & STEP-BY-STEP SOLUTION:
+[Provide actual equations, numbers, steps, or realistic scenario analysis]
+===STEP===
+SPOKEN: To wrap up today's lesson, here is a quick summary and common student pitfalls to avoid in WAEC/NECO examinations.
+BOARD:
+4. WAEC/NECO EXAMINATION SUMMARY:
+- Key formulas or rules to remember
+- Common student mistakes in exams
+- Practice past questions on CBT Practice Engine`;
 
         try {
-          const systemPrompt = `You are a Senior Secondary School Textbook Author and WAEC/NECO Chief Examiner. 
-Your goal is to teach "${topic}" under "${subjectName}" thoroughly and comprehensively. 
-Provide real definitions, exact classifications, actual lists, fully worked numerical examples, and realistic WAEC past exam points.
-Do NOT use placeholder summaries or placeholders like "Type A" or "Rule 1". Write full, actual educational content.`;
+          const geminiRes = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                contents: [{ parts: [{ text: prompt }] }],
+                generationConfig: {
+                  temperature: 0.2,
+                  maxOutputTokens: 3000
+                }
+              })
+            }
+          );
 
-          const userPrompt = `Teach the topic "${topic}" for ${subjectName} in EXACTLY 4 comprehensive steps.
+          const data = await geminiRes.json();
 
-Format your entire response strictly as valid JSON with NO extra text before or after:
-{
-  "steps": [
-    {
-      "spokenText": "Welcome students! Today we are learning about ${topic} in ${subjectName}...",
-      "chalkboardAction": "TOPIC: ${topic}\\nSUBJECT: ${subjectName}"
-    },
-    {
-      "spokenText": "Detailed explanation defining ${topic} comprehensively...",
-      "chalkboardAction": "1. DEFINITION:\\n[Write the exact, full textbook definition here]"
-    },
-    {
-      "spokenText": "Explanation detailing all the real types, components, or key characteristics of ${topic}...",
-      "chalkboardAction": "2. TYPES & FEATURES:\\n- [Type 1 with description]\\n- [Type 2 with description]\\n- [Type 3 with description]"
-    },
-    {
-      "spokenText": "Walkthrough of a real, fully worked numerical calculation or practical examination scenario...",
-      "chalkboardAction": "3. WORKED EXAMPLE / CASE STUDY:\\n[Write actual equations, numbers, steps, or detailed textual breakdown here]"
-    }
-  ]
-}`;
+          if (!data.candidates || !data.candidates[0].content.parts[0].text) {
+            throw new Error("Invalid response structure from Gemini API");
+          }
 
-          // Call Cloudflare Workers AI
-          const aiResponse = await env.AI.run("@cf/meta/llama-3-8b-instruct", {
-            messages: [
-              { role: "system", content: systemPrompt },
-              { role: "user", content: userPrompt }
-            ],
-            max_tokens: 2200,
-            temperature: 0.3 // Lower temperature prevents creative formatting hallucinations
+          const rawResponse = data.candidates[0].content.parts[0].text;
+
+          // Robust delimiter parsing that never breaks on long JSON text
+          const stepBlocks = rawResponse.split("===STEP===");
+          const steps = stepBlocks.map(block => {
+            const spokenMatch = block.match(/SPOKEN:\s*([\s\S]*?)(?=BOARD:|$)/i);
+            const boardMatch = block.match(/BOARD:\s*([\s\S]*?)$/i);
+
+            return {
+              spokenText: spokenMatch ? spokenMatch[1].trim() : `Let's examine ${topic}.`,
+              chalkboardAction: boardMatch ? boardMatch[1].trim() : `${topic} Notes`
+            };
           });
 
-          const rawText = aiResponse.response || (typeof aiResponse === "string" ? aiResponse : JSON.stringify(aiResponse));
-          
-          // Clean out markdown code fence block if present
-          let cleanText = rawText.replace(/```json/gi, '').replace(/```/g, '').trim();
-          
-          const jsonStart = cleanText.indexOf('{');
-          const jsonEnd = cleanText.lastIndexOf('}') + 1;
+          return Response.json(
+            { success: true, topic, subjectName, chalkboardScript: steps },
+            { headers: corsHeaders }
+          );
 
-          if (jsonStart !== -1 && jsonEnd > jsonStart) {
-            cleanText = cleanText.substring(jsonStart, jsonEnd);
-            const parsed = JSON.parse(cleanText);
-            if (parsed.steps && Array.isArray(parsed.steps) && parsed.steps.length > 0) {
-              steps = parsed.steps;
-            }
-          }
-        } catch (e) {
-          console.error("AI Parsing Exception:", e);
+        } catch (err) {
+          console.error("Gemini API Error:", err);
+          return Response.json(
+            { success: false, error: "Failed to generate lesson content.", details: err.message },
+            { status: 500, headers: corsHeaders }
+          );
         }
-
-        // Emergency Fallback (In case Cloudflare AI service times out)
-        if (!steps || steps.length === 0) {
-          steps = [
-            {
-              spokenText: `Welcome students! Today we are examining ${topic} under ${subjectName} according to the WAEC and NECO syllabus.`,
-              chalkboardAction: `SUBJECT: ${subjectName}\nTOPIC: ${topic}\nLEVEL: SS1 - SS3`
-            },
-            {
-              spokenText: `${topic} is defined as the systematic study and application of core principles governing ${subjectName}. It plays a crucial role in senior secondary education.`,
-              chalkboardAction: `1. DEFINITION:\n${topic} refers to the practical and theoretical processes involved in ${subjectName}.`
-            },
-            {
-              spokenText: `Key branches of ${topic} include foundational theory, structural analysis, and practical implementation.`,
-              chalkboardAction: `2. CORE BRANCHES & TYPES:\n- Theoretical Foundations\n- Practical Applications\n- Analytical Evaluation`
-            },
-            {
-              spokenText: `Always remember to review past WAEC/NECO questions on ${topic} using your CBT practice engine.`,
-              chalkboardAction: `3. EXAMINATION STRATEGY:\n- Master key definitions\n- Practice step-by-step solutions\n- Test your speed on CBT engine`
-            }
-          ];
-        }
-
-        return Response.json(
-          {
-            success: true,
-            topic,
-            subjectName,
-            chalkboardScript: steps
-          },
-          { headers: corsHeaders }
-        );
       }
 
       // 5. Save Student Progress
