@@ -89,7 +89,7 @@ export default {
         );
       }
 
-      // 4. Cloudflare Native Workers AI Lesson Generator
+      // 4. Cloudflare Native Workers AI Lesson Generator (@cf/meta/llama-3.1-8b-instruct)
       if (pathname === "/api/generate-ai-script" && request.method === "POST") {
         const { topic, subjectName } = await request.json();
 
@@ -148,8 +148,8 @@ BOARD:
 [Provide actual equations, numbers, steps, or real-world scenario analysis]`;
 
         try {
-          // Call Native Cloudflare Workers AI
-          const aiResponse = await env.AI.run("@cf/meta/llama-3.3-70b-instruct", {
+          // Calling supported Cloudflare Workers AI Model
+          const aiResponse = await env.AI.run("@cf/meta/llama-3.1-8b-instruct", {
             messages: [
               { role: "system", content: systemPrompt },
               { role: "user", content: userPrompt }
