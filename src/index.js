@@ -100,49 +100,66 @@ export default {
           );
         }
 
-        // Call Cloudflare Workers AI (LLaMA 3 Chat Model)
-        const aiResponse = await env.AI.run("@cf/meta/llama-3-8b-instruct", {
-          messages: [
-            {
-              role: "system",
-              content: `You are an expert secondary school teacher for de-blaise-tutorials preparing students for WAEC and NECO national exams. Respond ONLY with valid JSON.`
-            },
-            {
-              role: "user",
-              content: `Explain the topic "${topic}" under the subject "${subjectName}" step-by-step for SS1-SS3 students. Return EXACTLY a JSON object with this key:
-{
-  "steps": [
-    {
-      "spokenText": "Teacher explanation...",
-      "chalkboardAction": "Text or equation written on board..."
-    }
-  ]
-}`
-            }
-          ],
-          max_tokens: 1200
-        });
+        let steps = [];
 
-        let scriptData;
         try {
-          const rawText = aiResponse.response || JSON.stringify(aiResponse);
-          const jsonStart = rawText.indexOf('{');
-          const jsonEnd = rawText.lastIndexOf('}') + 1;
-          const cleanJson = rawText.substring(jsonStart, jsonEnd);
-          scriptData = JSON.parse(cleanJson);
-        } catch (e) {
-          scriptData = {
-            steps: [
+          // Call Cloudflare Workers AI (LLaMA 3 Chat Model)
+          const aiResponse = await env.AI.run("@cf/meta/llama-3-8b-instruct", {
+            messages: [
               {
-                spokenText: `Welcome to de-blaise-tutorials! Today we will examine ${topic} in ${subjectName}.`,
-                chalkboardAction: `${subjectName}: ${topic}`
+                role: "system",
+                content: "You are an expert WAEC/NECO teacher. Output ONLY raw JSON. Do not include markdown formatting, backticks, or intro text."
               },
               {
-                spokenText: `Let's break down the key principles of ${topic} aligned with WAEC/NECO syllabus.`,
-                chalkboardAction: `Key Concept: ${topic}`
+                role: "user",
+                content: `Create a 3-step chalkboard lesson for the topic "${topic}" in "${subjectName}".
+Return EXACTLY a JSON object with a "steps" array containing objects with "spokenText" and "chalkboardAction".
+Example format:
+{
+  "steps": [
+    {"spokenText": "Welcome to class...", "chalkboardAction": "Topic: ${topic}"}
+  ]
+}`
               }
-            ]
-          };
+            ],
+            max_tokens: 1000
+          });
+
+          // Extract text response safely
+          const rawText = aiResponse.response || (typeof aiResponse === "string" ? aiResponse : JSON.stringify(aiResponse));
+          
+          // Clean out markdown code blocks if LLaMA added them
+          const cleanText = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
+          
+          const jsonStart = cleanText.indexOf('{');
+          const jsonEnd = cleanText.lastIndexOf('}') + 1;
+
+          if (jsonStart !== -1 && jsonEnd > jsonStart) {
+            const parsed = JSON.parse(cleanText.substring(jsonStart, jsonEnd));
+            if (parsed.steps && Array.isArray(parsed.steps) && parsed.steps.length > 0) {
+              steps = parsed.steps;
+            }
+          }
+        } catch (e) {
+          console.error("AI Parsing Error:", e);
+        }
+
+        // Guaranteed fallback if AI output fails or parses empty
+        if (!steps || steps.length === 0) {
+          steps = [
+            {
+              spokenText: `Welcome to de-blaise-tutorials! Today we are studying ${topic} under ${subjectName}.`,
+              chalkboardAction: `Subject: ${subjectName}\nTopic: ${topic}`
+            },
+            {
+              spokenText: `In WAEC and NECO examinations, questions on ${topic} focus on core principles and definitions.`,
+              chalkboardAction: `Key Focus: ${topic} Principles`
+            },
+            {
+              spokenText: `Review these concepts carefully and proceed to practice past exam questions in the CBT engine.`,
+              chalkboardAction: `Summary: ${topic} Complete`
+            }
+          ];
         }
 
         return Response.json(
@@ -150,7 +167,7 @@ export default {
             success: true,
             topic,
             subjectName,
-            chalkboardScript: scriptData.steps || []
+            chalkboardScript: steps
           },
           { headers: corsHeaders }
         );
