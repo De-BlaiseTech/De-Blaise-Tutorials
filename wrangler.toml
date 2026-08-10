@@ -11,7 +11,7 @@ binding = "DB"
 database_name = "school-tutorials-db"
 database_id = "5dc89e85-5373-4503-b973-886f71ab7341"
 
-# Enable Cloudflare Workers Free AI Engine
+# Enables Cloudflare Workers Native AI Engine
 [ai]
 binding = "AI"
 
