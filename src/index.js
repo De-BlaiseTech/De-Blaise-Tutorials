@@ -89,7 +89,7 @@ export default {
         );
       }
 
-      // 4. Gemini 2.5 Flash API Generator (Comprehensive Lesson Generator)
+      // 4. Gemini API Lesson Generator (Supports Auth Keys)
       if (pathname === "/api/generate-ai-script" && request.method === "POST") {
         const { topic, subjectName } = await request.json();
 
@@ -102,115 +102,129 @@ export default {
 
         const apiKey = env.GEMINI_API_KEY;
 
-        let steps = [];
+        if (!apiKey) {
+          return Response.json(
+            { success: false, error: "GEMINI_API_KEY missing in Cloudflare variables." },
+            { status: 500, headers: corsHeaders }
+          );
+        }
 
-        // Try Gemini 2.5 Flash API Call if API key exists
-        if (apiKey) {
-          try {
-            const prompt = `You are a Senior Secondary School teacher for de-blaise-tutorials preparing students for WAEC and NECO exams.
+        const prompt = `You are an expert Senior Secondary School teacher for de-blaise-tutorials preparing students for WAEC and NECO exams.
 Write a comprehensive, textbook-grade lesson note on the topic "${topic}" under "${subjectName}".
 
-Write complete, thorough educational content that students can copy directly into their notebooks. Include actual definitions, real classifications/types, detailed worked numerical examples/case studies, formulas, and WAEC exam tips.
+Requirements:
+- Write out actual, detailed educational content so students can copy complete notes into their notebooks.
+- Include formal definitions, real classifications/types, worked numerical examples or case studies, formulas, and WAEC exam tips. Do NOT use placeholders.
 
 Divide your teaching strictly into 4 steps using the tag "===STEP===" between each step.
 
 Format each step like this:
 
-SPOKEN: [Teacher spoken explanation]
+SPOKEN: [Teacher spoken explanation for lesson title]
 BOARD:
-[Full detailed textbook notes for chalkboard]
+SUBJECT: ${subjectName}
+TOPIC: ${topic}
+CLASS: SS1 - SS3 (WAEC/NECO Standard)
 
 ===STEP===
 
-SPOKEN: [Teacher spoken explanation for definitions]
+SPOKEN: [Teacher spoken explanation for definitions and core concepts]
 BOARD:
-1. DEFINITION & OVERVIEW
-[Write complete, detailed textbook definition and foundational rules]
+1. FORMAL DEFINITION & FOUNDATIONAL PRINCIPLES:
+[Write the full, actual textbook definition and explain technical terms in detail]
 
 ===STEP===
 
-SPOKEN: [Teacher spoken explanation for classifications/types]
+SPOKEN: [Teacher spoken explanation for types and characteristics]
 BOARD:
-2. TYPES & CLASSIFICATIONS
-- [Type 1]: Full description and details
-- [Type 2]: Full description and details
+2. TYPES & CLASSIFICATIONS:
+- [Type 1 Name]: Detailed explanation
+- [Type 2 Name]: Detailed explanation
+- [Type 3 Name]: Detailed explanation
 
 ===STEP===
 
-SPOKEN: [Teacher spoken explanation for practical/worked example]
+SPOKEN: [Teacher spoken explanation for worked example or case study]
 BOARD:
-3. WORKED EXAMPLE / PRACTICAL APPLICATION
-[Full step-by-step example with numbers, equations, or analysis]`;
+3. WORKED EXAMPLE / PRACTICAL APPLICATION:
+[Provide actual equations, numbers, steps, or real-world analysis]`;
 
-            const geminiRes = await fetch(
-              `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
-              {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  contents: [{ parts: [{ text: prompt }] }],
-                  generationConfig: {
-                    temperature: 0.2,
-                    maxOutputTokens: 2500
-                  }
-                })
-              }
-            );
+        try {
+          // Supports both Auth Key headers and legacy URL parameters
+          const isAuthKey = apiKey.startsWith("AQ.");
+          const requestUrl = isAuthKey 
+            ? "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
+            : `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
 
-            const data = await geminiRes.json();
+          const requestHeaders = {
+            "Content-Type": "application/json"
+          };
 
-            if (data.candidates && data.candidates[0] && data.candidates[0].content) {
-              const rawText = data.candidates[0].content.parts[0].text;
-
-              if (rawText.includes("===STEP===")) {
-                const stepBlocks = rawText.split("===STEP===");
-                steps = stepBlocks.map(block => {
-                  const spokenMatch = block.match(/SPOKEN:\s*([\s\S]*?)(?=BOARD:|$)/i);
-                  const boardMatch = block.match(/BOARD:\s*([\s\S]*?)$/i);
-
-                  return {
-                    spokenText: spokenMatch ? spokenMatch[1].trim() : `Let's examine ${topic}.`,
-                    chalkboardAction: boardMatch ? boardMatch[1].trim() : block.trim()
-                  };
-                }).filter(s => s.chalkboardAction.length > 5);
-              }
-            }
-          } catch (e) {
-            console.error("Gemini API execution error:", e);
+          if (isAuthKey) {
+            requestHeaders["Authorization"] = `Bearer ${apiKey}`;
           }
-        }
 
-        // Automatic Fallback System (Ensures 100% Uptime even without API key)
-        if (!steps || steps.length === 0) {
-          steps = [
-            {
-              spokenText: `Welcome students! Today we are examining ${topic} under ${subjectName} aligned with the WAEC and NECO syllabus.`,
-              chalkboardAction: `SUBJECT: ${subjectName}\nTOPIC: ${topic}\nLEVEL: SS1 - SS3 Senior Secondary`
-            },
-            {
-              spokenText: `Let's start with the formal definition. ${topic} involves the fundamental concepts, rules, and structures that govern ${subjectName}.`,
-              chalkboardAction: `1. FORMAL DEFINITION OF ${topic.toUpperCase()}:\n- Systematic processes and theoretical frameworks in ${subjectName}.\n- Key Objectives: Comprehensive understanding for national examinations.`
-            },
-            {
-              spokenText: `Now let's break down the primary classifications and types you must memorize for objective and theory questions.`,
-              chalkboardAction: `2. TYPES & CLASSIFICATIONS:\n- Primary Branch: Core concepts and initial principles.\n- Secondary Branch: Practical applications and analytical evaluations.`
-            },
-            {
-              spokenText: `Pay close attention to how WAEC examiners grade this topic in past questions. Master these key points before taking your CBT test.`,
-              chalkboardAction: `3. WAEC/NECO EXAM STRATEGY:\n- Memorize core definitions and technical terms.\n- Practice calculations and step-by-step logic.\n- Practice past questions on CBT Practice Engine.`
-            }
-          ];
-        }
+          const geminiRes = await fetch(requestUrl, {
+            method: "POST",
+            headers: requestHeaders,
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: prompt }] }],
+              generationConfig: {
+                temperature: 0.2,
+                maxOutputTokens: 2500
+              }
+            })
+          });
 
-        return Response.json(
-          {
-            success: true,
-            topic,
-            subjectName,
-            chalkboardScript: steps
-          },
-          { headers: corsHeaders }
-        );
+          const data = await geminiRes.json();
+
+          if (!geminiRes.ok || data.error) {
+            console.error("Gemini API Error Response:", JSON.stringify(data));
+            return Response.json(
+              { success: false, error: `Gemini API Error: ${data.error ? data.error.message : geminiRes.statusText}` },
+              { status: 500, headers: corsHeaders }
+            );
+          }
+
+          const rawText = data.candidates[0].content.parts[0].text;
+          let steps = [];
+
+          if (rawText.includes("===STEP===")) {
+            const stepBlocks = rawText.split("===STEP===");
+            steps = stepBlocks.map(block => {
+              const spokenMatch = block.match(/SPOKEN:\s*([\s\S]*?)(?=BOARD:|$)/i);
+              const boardMatch = block.match(/BOARD:\s*([\s\S]*?)$/i);
+
+              return {
+                spokenText: spokenMatch ? spokenMatch[1].trim() : `Let's examine ${topic}.`,
+                chalkboardAction: boardMatch ? boardMatch[1].trim() : block.trim()
+              };
+            }).filter(s => s.chalkboardAction.length > 5);
+          } else {
+            const chunks = rawText.split("\n\n");
+            steps = [
+              {
+                spokenText: `Welcome to class! Today we are studying ${topic} in ${subjectName}.`,
+                chalkboardAction: chunks.slice(0, 2).join("\n\n")
+              },
+              {
+                spokenText: `Let's break down the details for ${topic}.`,
+                chalkboardAction: chunks.slice(2).join("\n\n") || rawText
+              }
+            ];
+          }
+
+          return Response.json(
+            { success: true, topic, subjectName, chalkboardScript: steps },
+            { headers: corsHeaders }
+          );
+
+        } catch (err) {
+          return Response.json(
+            { success: false, error: `Execution Error: ${err.message}` },
+            { status: 500, headers: corsHeaders }
+          );
+        }
       }
 
       // 5. Save Student Progress
