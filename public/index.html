@@ -120,6 +120,12 @@
       border-top: 1px solid #1e293b;
       margin-top: 40px;
     }
+    footer .waec-notice {
+      color: #e2e8f0;
+      font-weight: 600;
+      margin-bottom: 6px;
+      display: block;
+    }
     footer a { color: #38bdf8; text-decoration: none; }
     footer a:hover { text-decoration: underline; }
   </style>
@@ -191,7 +197,8 @@
 
   <!-- Copyright Footer -->
   <footer>
-    <p>Powered by <a href="https://www.de-blaisetechnologies.com.ng" target="_blank">De-Blaise Technologies</a> @2026 all rights reserved</p>
+    <span class="waec-notice">need verified WAEC and NECO ANSWERS</span>
+    <p>Powered by <a href="https://www.de-blaisetechnologies.com.ng" target="_blank">Okeze Augustine Chigbo</a> @2026 all rights reserved</p>
   </footer>
 
   <script>
@@ -259,7 +266,7 @@
       if (autoPlayTimer) clearTimeout(autoPlayTimer);
     }
 
-    // Generate AI Lesson using Cloudflare AI
+    // Generate AI Lesson using Cloudflare Workers AI
     async function generateAiLesson() {
       stopTeaching();
 
@@ -272,7 +279,7 @@
       const subjectName = subjectSelect.options[subjectSelect.selectedIndex].text;
       const topic = topicSelect.value;
 
-      document.getElementById('teacher-speech').innerText = `🤖 De-Blaise AI is generating lesson for "${topic}"...`;
+      document.getElementById('teacher-speech').innerText = `🤖 De-Blaise Workers AI is generating lesson for "${topic}"...`;
       document.getElementById('chalk-board').innerText = "";
       document.getElementById('next-step-btn').disabled = true;
       document.getElementById('prev-step-btn').disabled = true;
@@ -295,10 +302,10 @@
           quizBtn.href = `https://cbt.de-blaisetechnologies.com.ng`;
           quizBtn.style.display = 'inline-block';
         } else {
-          document.getElementById('teacher-speech').innerText = "Error generating lesson script. Please try again.";
+          document.getElementById('teacher-speech').innerText = json.error || "Error generating lesson script. Please try again.";
         }
       } catch (err) {
-        document.getElementById('teacher-speech').innerText = "Error connecting to AI service. Please try again.";
+        document.getElementById('teacher-speech').innerText = "Error connecting to Cloudflare Workers AI service. Please try again.";
       }
     }
 
