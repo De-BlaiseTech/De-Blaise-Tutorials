@@ -89,7 +89,7 @@ export default {
         );
       }
 
-      // 4. Native Cloudflare Workers AI Script Generator
+      // 4. Native Cloudflare Workers AI Script Generator (Textbook Mode)
       if (pathname === "/api/generate-ai-script" && request.method === "POST") {
         const { topic, subjectName } = await request.json();
 
@@ -103,76 +103,82 @@ export default {
         let steps = [];
 
         try {
-          const systemPrompt = "You are a master West African secondary school teacher preparing students for WAEC/NECO exams. Output ONLY a valid raw JSON object. Do not wrap in markdown or backticks.";
-          const userPrompt = `Create a detailed, comprehensive 5-step lesson for the topic "${topic}" in "${subjectName}" aligned with the WAEC/NECO SS1-SS3 syllabus.
+          const systemPrompt = `You are a Senior Secondary School Textbook Author and WAEC/NECO Chief Examiner. 
+Your goal is to teach "${topic}" under "${subjectName}" thoroughly and comprehensively. 
+Provide real definitions, exact classifications, actual lists, fully worked numerical examples, and realistic WAEC past exam points.
+Do NOT use placeholder summaries or placeholders like "Type A" or "Rule 1". Write full, actual educational content.`;
 
-The lesson MUST cover:
-1. Introduction & Formal Definition
-2. Types, Classifications, or Key Components
-3. Step-by-Step Worked Example or Detailed Explanation
-4. Common Exam Pitfalls & Key Formulas/Rules
-5. Quick Summary & WAEC Exam Tip
+          const userPrompt = `Teach the topic "${topic}" for ${subjectName} in EXACTLY 4 comprehensive steps.
 
-Return EXACTLY a JSON object with this key structure:
+Format your entire response strictly as valid JSON with NO extra text before or after:
 {
   "steps": [
     {
-      "spokenText": "Detailed explanation written in clear, engaging simple teacher tone explaining definitions, concepts, and steps...",
-      "chalkboardAction": "Clear chalkboard notes, formulas, bullet points, or worked mathematical steps..."
+      "spokenText": "Welcome students! Today we are learning about ${topic} in ${subjectName}...",
+      "chalkboardAction": "TOPIC: ${topic}\\nSUBJECT: ${subjectName}"
+    },
+    {
+      "spokenText": "Detailed explanation defining ${topic} comprehensively...",
+      "chalkboardAction": "1. DEFINITION:\\n[Write the exact, full textbook definition here]"
+    },
+    {
+      "spokenText": "Explanation detailing all the real types, components, or key characteristics of ${topic}...",
+      "chalkboardAction": "2. TYPES & FEATURES:\\n- [Type 1 with description]\\n- [Type 2 with description]\\n- [Type 3 with description]"
+    },
+    {
+      "spokenText": "Walkthrough of a real, fully worked numerical calculation or practical examination scenario...",
+      "chalkboardAction": "3. WORKED EXAMPLE / CASE STUDY:\\n[Write actual equations, numbers, steps, or detailed textual breakdown here]"
     }
   ]
 }`;
 
-          // Call Cloudflare Workers AI (LLaMA 3 Chat Model)
+          // Call Cloudflare Workers AI
           const aiResponse = await env.AI.run("@cf/meta/llama-3-8b-instruct", {
             messages: [
               { role: "system", content: systemPrompt },
               { role: "user", content: userPrompt }
             ],
-            max_tokens: 2500
+            max_tokens: 2200,
+            temperature: 0.3 // Lower temperature prevents creative formatting hallucinations
           });
 
-          // Extract text response safely
           const rawText = aiResponse.response || (typeof aiResponse === "string" ? aiResponse : JSON.stringify(aiResponse));
           
-          // Clean markdown formatting like ```json or ```
-          const cleanText = rawText.replace(/```json/gi, '').replace(/```/g, '').trim();
+          // Clean out markdown code fence block if present
+          let cleanText = rawText.replace(/```json/gi, '').replace(/```/g, '').trim();
           
           const jsonStart = cleanText.indexOf('{');
           const jsonEnd = cleanText.lastIndexOf('}') + 1;
 
           if (jsonStart !== -1 && jsonEnd > jsonStart) {
-            const parsed = JSON.parse(cleanText.substring(jsonStart, jsonEnd));
+            cleanText = cleanText.substring(jsonStart, jsonEnd);
+            const parsed = JSON.parse(cleanText);
             if (parsed.steps && Array.isArray(parsed.steps) && parsed.steps.length > 0) {
               steps = parsed.steps;
             }
           }
         } catch (e) {
-          console.error("AI Parsing Error:", e);
+          console.error("AI Parsing Exception:", e);
         }
 
-        // Detailed 5-Step Fallback Generator if AI parsing fails
+        // Emergency Fallback (In case Cloudflare AI service times out)
         if (!steps || steps.length === 0) {
           steps = [
             {
-              spokenText: `Welcome to class! Today we are diving deep into ${topic} under ${subjectName}. This is a crucial topic for your WAEC and NECO examinations.`,
-              chalkboardAction: `SUBJECT: ${subjectName}\nTOPIC: ${topic}\nLEVEL: SS1 - SS3 Senior Secondary`
+              spokenText: `Welcome students! Today we are examining ${topic} under ${subjectName} according to the WAEC and NECO syllabus.`,
+              chalkboardAction: `SUBJECT: ${subjectName}\nTOPIC: ${topic}\nLEVEL: SS1 - SS3`
             },
             {
-              spokenText: `Let's start with the fundamental definition. ${topic} involves core rules and principles that form the foundation for standard examination questions.`,
-              chalkboardAction: `1. DEFINITION & CORE PRINCIPLES:\n- Key concept of ${topic}\n- Fundamental Laws & Standards`
+              spokenText: `${topic} is defined as the systematic study and application of core principles governing ${subjectName}. It plays a crucial role in senior secondary education.`,
+              chalkboardAction: `1. DEFINITION:\n${topic} refers to the practical and theoretical processes involved in ${subjectName}.`
             },
             {
-              spokenText: `Now let's break down the types and classifications you must know for your theoretical and objective exams.`,
-              chalkboardAction: `2. CLASSIFICATION & TYPES:\n- Primary Features & Variations\n- Key Components`
+              spokenText: `Key branches of ${topic} include foundational theory, structural analysis, and practical implementation.`,
+              chalkboardAction: `2. CORE BRANCHES & TYPES:\n- Theoretical Foundations\n- Practical Applications\n- Analytical Evaluation`
             },
             {
-              spokenText: `Pay close attention to this worked example. In exams, markers look for clear step-by-step logic and correct application of formulas or concepts.`,
-              chalkboardAction: `3. WORKED EXAMPLE / APPLICATION:\nStep 1: Identify given terms\nStep 2: Apply core rule\nStep 3: State final conclusion`
-            },
-            {
-              spokenText: `To round up, remember that WAEC often tests common student mistakes in this topic. Always double check your units and definitions!`,
-              chalkboardAction: `4. WAEC/NECO EXAM SUMMARY:\n- Review formulas & definitions\n- Avoid common calculation errors\n- Practice past questions on CBT Engine`
+              spokenText: `Always remember to review past WAEC/NECO questions on ${topic} using your CBT practice engine.`,
+              chalkboardAction: `3. EXAMINATION STRATEGY:\n- Master key definitions\n- Practice step-by-step solutions\n- Test your speed on CBT engine`
             }
           ];
         }
