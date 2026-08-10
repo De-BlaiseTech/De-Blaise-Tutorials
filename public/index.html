@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>de-blaise-tutorials - WAEC/NECO E-Learning Platform</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #0f172a; color: #f8fafc; padding: 15px; }
+    .container { max-width: 850px; margin: 0 auto; }
+    .brand-header { text-align: center; margin-bottom: 20px; }
+    .brand-header h1 { font-size: 2rem; color: #38bdf8; text-transform: lowercase; }
+    .brand-header p { font-size: 0.95rem; color: #94a3b8; margin-top: 4px; }
+    
+    /* Subject Selector Controls */
+    .controls-card {
+      background: #1e293b;
+      padding: 16px;
+      border-radius: 10px;
+      margin-bottom: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .form-group { display: flex; flex-direction: column; gap: 6px; }
+    label { font-size: 0.85rem; color: #38bdf8; font-weight: bold; }
+    select, input {
+      padding: 10px; border-radius: 6px; border: 1px solid #334155;
+      background: #0f172a; color: #ffffff; font-size: 0.95rem;
+    }
+    
+    /* Chalkboard Styling */
+    .chalkboard {
+      background: #0f172a;
+      border: 6px solid #334155;
+      border-radius: 12px;
+      min-height: 250px;
+      padding: 20px;
+      margin: 15px 0;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+    }
+    .chalk-text { font-family: 'Courier New', Courier, monospace; font-size: 1.15rem; color: #f1f5f9; white-space: pre-wrap; line-height: 1.6; }
+    .teacher-speech { background: #0284c7; color: #ffffff; padding: 12px; border-radius: 8px; margin-bottom: 15px; font-weight: 500; }
+    
+    /* Buttons */
+    .btn-group { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 15px; }
+    button, .quiz-btn {
+      background: #2563eb; color: #ffffff; border: none; padding: 12px 18px; border-radius: 6px;
+      cursor: pointer; font-weight: bold; text-decoration: none; display: inline-block; transition: 0.2s;
+    }
+    button:hover, .quiz-btn:hover { background: #1d4ed8; }
+    .ai-btn { background: #9333ea; }
+    .ai-btn:hover { background: #7e22ce; }
+    .quiz-btn { background: #16a34a; }
+    .quiz-btn:hover { background: #15803d; }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <div class="brand-header">
+      <h1>de-blaise-tutorials</h1>
+      <p id="lesson-title">WAEC & NECO Senior Secondary Curriculum</p>
+    </div>
+
+    <!-- Controls to Select Subject & Generate AI Lesson -->
+    <div class="controls-card">
+      <div class="form-group">
+        <label for="subject-select">Select WAEC/NECO Subject:</label>
+        <select id="subject-select" onchange="onSubjectChange()">
+          <option value="">Loading subjects...</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label for="topic-input">Lesson Topic:</label>
+        <input type="text" id="topic-input" placeholder="e.g. Photosynthesis, Quadratic Equations, Demand & Supply" value="Quadratic Equations">
+      </div>
+
+      <div class="btn-group">
+        <button class="ai-btn" onclick="generateAiLesson()">✨ Generate AI Lesson</button>
+      </div>
+    </div>
+
+    <!-- Chalkboard Interface -->
+    <div class="chalkboard">
+      <div id="teacher-speech" class="teacher-speech">Select a subject and click Generate AI Lesson to start.</div>
+      <div id="chalk-board" class="chalk-text"></div>
+    </div>
+
+    <div class="btn-group">
+      <button id="next-step-btn" onclick="nextStep()" disabled>Next Step ➔</button>
+      <a id="quiz-link" href="#" target="_blank" class="quiz-btn" style="display: none;">📝 Take Topic Quiz</a>
+    </div>
+  </div>
+
+  <script>
+    let currentScript = [];
+    let currentStep = 0;
+
+    // Load All WAEC/NECO Subjects into Dropdown
+    async function loadSubjects() {
+      try {
+        const res = await fetch('/api/subjects');
+        const json = await res.json();
+
+        if (json.success) {
+          const select = document.getElementById('subject-select');
+          select.innerHTML = '';
+          
+          json.subjects.forEach(sub => {
+            const opt = document.createElement('option');
+            opt.value = sub.id;
+            opt.textContent = `[${sub.category}] ${sub.name}`;
+            select.appendChild(opt);
+          });
+        }
+      } catch (err) {
+        console.error("Failed to load subjects:", err);
+      }
+    }
+
+    // Generate AI Lesson using Cloudflare AI
+    async function generateAiLesson() {
+      const select = document.getElementById('subject-select');
+      const subjectName = select.options[select.selectedIndex].text;
+      const topic = document.getElementById('topic-input').value;
+
+      if (!topic) return alert("Please enter a topic!");
+
+      document.getElementById('teacher-speech').innerText = `🤖 De-Blaise AI is generating lesson for "${topic}"...`;
+      document.getElementById('chalk-board').innerText = "";
+      document.getElementById('next-step-btn').disabled = true;
+
+      try {
+        const res = await fetch('/api/generate-ai-script', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ topic, subjectName })
+        });
+
+        const json = await res.json();
+
+        if (json.success && json.chalkboardScript) {
+          currentScript = json.chalkboardScript;
+          currentStep = 0;
+          renderStep();
+          document.getElementById('next-step-btn').disabled = false;
+          
+          const quizBtn = document.getElementById('quiz-link');
+          quizBtn.href = `https://your-quiz-website.com/practice?topic=${encodeURIComponent(topic)}`;
+          quizBtn.style.display = 'inline-block';
+        }
+      } catch (err) {
+        document.getElementById('teacher-speech').innerText = "Error generating lesson. Please try again.";
+      }
+    }
+
+    function renderStep() {
+      if (currentStep < currentScript.length) {
+        const step = currentScript[currentStep];
+        document.getElementById('teacher-speech').innerText = step.spokenText;
+        document.getElementById('chalk-board').innerText += `\n> ${step.chalkboardAction}\n`;
+      } else {
+        document.getElementById('teacher-speech').innerText = "Lesson complete! Click below to practice the quiz.";
+        document.getElementById('next-step-btn').disabled = true;
+      }
+    }
+
+    function nextStep() {
+      currentStep++;
+      renderStep();
+    }
+
+    // Initialize on Page Load
+    loadSubjects();
+  </script>
+</body>
+</html>

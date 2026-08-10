@@ -1,0 +1,19 @@
+name = "de-blaise-tutorials"
+main = "src/index.js"
+compatibility_date = "2026-01-01"
+
+[assets]
+directory = "./public"
+binding = "ASSETS"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "school-tutorials-db"
+database_id = "5dc89e85-5373-4503-b973-886f71ab7341"
+
+# Enable Cloudflare Workers Free AI Engine
+[ai]
+binding = "AI"
+
+[vars]
+EXAM_BOARD = "WAEC/NECO"

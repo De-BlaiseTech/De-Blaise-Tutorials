@@ -1,0 +1,15 @@
+{
+  "name": "de-blaise-tutorials",
+  "version": "1.0.0",
+  "description": "de-blaise-tutorials - Secondary school full stack serverless app",
+  "main": "src/index.js",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "db:init": "wrangler d1 execute school-tutorials-db --local --file=./schema.sql",
+    "db:deploy": "wrangler d1 execute school-tutorials-db --remote --file=./schema.sql"
+  },
+  "devDependencies": {
+    "wrangler": "^3.0.0"
+  }
+}
