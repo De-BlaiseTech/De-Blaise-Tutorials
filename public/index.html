@@ -6,13 +6,29 @@
   <title>de-blaise-tutorials - WAEC/NECO E-Learning Platform</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #0f172a; color: #f8fafc; padding: 15px; }
-    .container { max-width: 850px; margin: 0 auto; }
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #0f172a; color: #f8fafc; padding: 15px; display: flex; flex-direction: column; min-height: 100vh; }
+    .container { max-width: 850px; margin: 0 auto; flex: 1; width: 100%; }
+    
+    /* Top Bar Navigation */
+    .top-nav {
+      display: flex;
+      justify: space-between;
+      align-items: center;
+      background: #1e293b;
+      padding: 10px 16px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      font-size: 0.9rem;
+    }
+    .top-nav a { color: #38bdf8; text-decoration: none; font-weight: 600; }
+    .top-nav a:hover { text-decoration: underline; }
+
+    /* Header */
     .brand-header { text-align: center; margin-bottom: 20px; }
     .brand-header h1 { font-size: 2rem; color: #38bdf8; text-transform: lowercase; }
     .brand-header p { font-size: 0.95rem; color: #94a3b8; margin-top: 4px; }
     
-    /* Subject Selector Controls */
+    /* Controls Card */
     .controls-card {
       background: #1e293b;
       padding: 16px;
@@ -28,6 +44,7 @@
       padding: 10px; border-radius: 6px; border: 1px solid #334155;
       background: #0f172a; color: #ffffff; font-size: 0.95rem;
     }
+    select:disabled { opacity: 0.6; cursor: not-allowed; }
     
     /* Chalkboard Styling */
     .chalkboard {
@@ -42,6 +59,30 @@
     .chalk-text { font-family: 'Courier New', Courier, monospace; font-size: 1.15rem; color: #f1f5f9; white-space: pre-wrap; line-height: 1.6; }
     .teacher-speech { background: #0284c7; color: #ffffff; padding: 12px; border-radius: 8px; margin-bottom: 15px; font-weight: 500; }
     
+    /* Services Banner Card */
+    .agency-card {
+      background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+      border: 1px solid #334155;
+      border-radius: 10px;
+      padding: 16px;
+      margin-top: 30px;
+      text-align: center;
+    }
+    .agency-card h3 { font-size: 1.05rem; color: #f8fafc; margin-bottom: 6px; }
+    .agency-card p { font-size: 0.85rem; color: #94a3b8; margin-bottom: 12px; }
+    .agency-btn {
+      background: transparent;
+      border: 1px solid #38bdf8;
+      color: #38bdf8;
+      padding: 8px 14px;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      text-decoration: none;
+      font-weight: bold;
+      display: inline-block;
+    }
+    .agency-btn:hover { background: #38bdf8; color: #0f172a; }
+
     /* Buttons */
     .btn-group { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 15px; }
     button, .quiz-btn {
@@ -53,11 +94,29 @@
     .ai-btn:hover { background: #7e22ce; }
     .quiz-btn { background: #16a34a; }
     .quiz-btn:hover { background: #15803d; }
+
+    /* Footer */
+    footer {
+      text-align: center;
+      padding: 20px 0 10px 0;
+      color: #64748b;
+      font-size: 0.85rem;
+      border-top: 1px solid #1e293b;
+      margin-top: 40px;
+    }
+    footer a { color: #38bdf8; text-decoration: none; }
+    footer a:hover { text-decoration: underline; }
   </style>
 </head>
 <body>
 
   <div class="container">
+    <!-- Quick Navigation Links -->
+    <div class="top-nav">
+      <span>📚 Tutorial Classroom</span>
+      <a href="https://cbt.de-blaisetechnologies.com.ng" target="_blank">🚀 Open CBT Practice Engine ➔</a>
+    </div>
+
     <div class="brand-header">
       <h1>de-blaise-tutorials</h1>
       <p id="lesson-title">WAEC & NECO Senior Secondary Curriculum</p>
@@ -73,8 +132,10 @@
       </div>
 
       <div class="form-group">
-        <label for="topic-input">Lesson Topic:</label>
-        <input type="text" id="topic-input" placeholder="e.g. Photosynthesis, Quadratic Equations, Demand & Supply" value="Quadratic Equations">
+        <label for="topic-select">Lesson Topic:</label>
+        <select id="topic-select" disabled>
+          <option value="">-- Select a subject first --</option>
+        </select>
       </div>
 
       <div class="btn-group">
@@ -90,9 +151,21 @@
 
     <div class="btn-group">
       <button id="next-step-btn" onclick="nextStep()" disabled>Next Step ➔</button>
-      <a id="quiz-link" href="#" target="_blank" class="quiz-btn" style="display: none;">📝 Take Topic Quiz</a>
+      <a id="quiz-link" href="https://cbt.de-blaisetechnologies.com.ng" target="_blank" class="quiz-btn" style="display: none;">📝 Practice CBT Test</a>
+    </div>
+
+    <!-- Agency Services Banner -->
+    <div class="agency-card">
+      <h3>Need Custom Web, Portal, or Software Development?</h3>
+      <p>We build full-stack educational portals, CBT practice engines, and enterprise web solutions.</p>
+      <a href="https://www.de-blaisetechnologies.com.ng" target="_blank" class="agency-btn">Visit De-Blaise Technologies ➔</a>
     </div>
   </div>
+
+  <!-- Copyright Footer -->
+  <footer>
+    <p>Powered by <a href="https://www.de-blaisetechnologies.com.ng" target="_blank">De-Blaise Technologies</a> @2026 all rights reserved</p>
+  </footer>
 
   <script>
     let currentScript = [];
@@ -106,7 +179,7 @@
 
         if (json.success) {
           const select = document.getElementById('subject-select');
-          select.innerHTML = '';
+          select.innerHTML = '<option value="">-- Choose Subject --</option>';
           
           json.subjects.forEach(sub => {
             const opt = document.createElement('option');
@@ -120,13 +193,47 @@
       }
     }
 
+    // Triggered automatically when a subject is selected
+    async function onSubjectChange() {
+      const subjectSelect = document.getElementById('subject-select');
+      const topicSelect = document.getElementById('topic-select');
+      const subjectId = subjectSelect.value;
+
+      if (!subjectId) {
+        topicSelect.innerHTML = '<option value="">-- Select a subject first --</option>';
+        topicSelect.disabled = true;
+        return;
+      }
+
+      topicSelect.disabled = true;
+      topicSelect.innerHTML = '<option value="">Loading topics...</option>';
+
+      try {
+        const res = await fetch(`/api/topics?subject_id=${subjectId}`);
+        const json = await res.json();
+
+        if (json.success && json.topics.length > 0) {
+          topicSelect.innerHTML = json.topics.map(t => `<option value="${t.title}">${t.title}</option>`).join('');
+          topicSelect.disabled = false;
+        } else {
+          topicSelect.innerHTML = '<option value="">No topics found for this subject</option>';
+        }
+      } catch (err) {
+        console.error("Failed to load topics:", err);
+        topicSelect.innerHTML = '<option value="">Error loading topics</option>';
+      }
+    }
+
     // Generate AI Lesson using Cloudflare AI
     async function generateAiLesson() {
-      const select = document.getElementById('subject-select');
-      const subjectName = select.options[select.selectedIndex].text;
-      const topic = document.getElementById('topic-input').value;
+      const subjectSelect = document.getElementById('subject-select');
+      const topicSelect = document.getElementById('topic-select');
 
-      if (!topic) return alert("Please enter a topic!");
+      if (!subjectSelect.value) return alert("Please select a subject!");
+      if (!topicSelect.value) return alert("Please select a topic!");
+
+      const subjectName = subjectSelect.options[subjectSelect.selectedIndex].text;
+      const topic = topicSelect.value;
 
       document.getElementById('teacher-speech').innerText = `🤖 De-Blaise AI is generating lesson for "${topic}"...`;
       document.getElementById('chalk-board').innerText = "";
@@ -148,11 +255,13 @@
           document.getElementById('next-step-btn').disabled = false;
           
           const quizBtn = document.getElementById('quiz-link');
-          quizBtn.href = `https://your-quiz-website.com/practice?topic=${encodeURIComponent(topic)}`;
+          quizBtn.href = `https://cbt.de-blaisetechnologies.com.ng`;
           quizBtn.style.display = 'inline-block';
+        } else {
+          document.getElementById('teacher-speech').innerText = "Error generating lesson script. Please try again.";
         }
       } catch (err) {
-        document.getElementById('teacher-speech').innerText = "Error generating lesson. Please try again.";
+        document.getElementById('teacher-speech').innerText = "Error connecting to AI service. Please try again.";
       }
     }
 
@@ -162,7 +271,7 @@
         document.getElementById('teacher-speech').innerText = step.spokenText;
         document.getElementById('chalk-board').innerText += `\n> ${step.chalkboardAction}\n`;
       } else {
-        document.getElementById('teacher-speech').innerText = "Lesson complete! Click below to practice the quiz.";
+        document.getElementById('teacher-speech').innerText = "Lesson complete! Click below to practice the CBT exam.";
         document.getElementById('next-step-btn').disabled = true;
       }
     }

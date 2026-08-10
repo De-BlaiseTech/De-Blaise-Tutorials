@@ -26,7 +26,28 @@ export default {
         );
       }
 
-      // 2. Fetch Existing Tutorial Topic from D1
+      // 2. Fetch Topics for Selected Subject
+      if (pathname === "/api/topics" && request.method === "GET") {
+        const subjectId = url.searchParams.get("subject_id");
+
+        if (!subjectId) {
+          return Response.json(
+            { success: false, error: "Missing 'subject_id' parameter." },
+            { status: 400, headers: corsHeaders }
+          );
+        }
+
+        const { results } = await env.DB.prepare(
+          "SELECT * FROM topics WHERE subject_id = ? ORDER BY title ASC"
+        ).bind(subjectId).all();
+
+        return Response.json(
+          { success: true, topics: results },
+          { headers: corsHeaders }
+        );
+      }
+
+      // 3. Fetch Existing Tutorial Topic from D1
       if (pathname === "/api/get-tutorial" && request.method === "GET") {
         const subjectId = url.searchParams.get("subjectId");
         const topicId = url.searchParams.get("topicId");
@@ -61,14 +82,14 @@ export default {
               title: tutorial.title,
               chalkboardScript: JSON.parse(tutorial.chalkboard_script),
               audioUrl: tutorial.audio_url || null,
-              quizUrl: tutorial.quiz_url || "https://your-quiz-website.com"
+              quizUrl: tutorial.quiz_url || "https://cbt.de-blaisetechnologies.com.ng"
             }
           },
           { headers: corsHeaders }
         );
       }
 
-      // 3. Native Cloudflare Workers AI Script Generator
+      // 4. Native Cloudflare Workers AI Script Generator
       if (pathname === "/api/generate-ai-script" && request.method === "POST") {
         const { topic, subjectName } = await request.json();
 
@@ -79,39 +100,46 @@ export default {
           );
         }
 
-        // System prompt tailored specifically for WAEC/NECO standard lessons
-        const prompt = `You are an expert secondary school teacher for de-blaise-tutorials preparing students for WAEC and NECO national exams.
-Explain the topic "${topic}" under the subject "${subjectName}" step-by-step for SS1-SS3 students.
-
-Respond ONLY with valid JSON in this exact structure:
+        // Call Cloudflare Workers AI (LLaMA 3 Chat Model)
+        const aiResponse = await env.AI.run("@cf/meta/llama-3-8b-instruct", {
+          messages: [
+            {
+              role: "system",
+              content: `You are an expert secondary school teacher for de-blaise-tutorials preparing students for WAEC and NECO national exams. Respond ONLY with valid JSON.`
+            },
+            {
+              role: "user",
+              content: `Explain the topic "${topic}" under the subject "${subjectName}" step-by-step for SS1-SS3 students. Return EXACTLY a JSON object with this key:
 {
   "steps": [
     {
-      "spokenText": "Teacher explanation here...",
-      "chalkboardAction": "Text or equation to write on chalkboard..."
+      "spokenText": "Teacher explanation...",
+      "chalkboardAction": "Text or equation written on board..."
     }
   ]
-}`;
-
-        // Call Cloudflare Workers AI (LLaMA 3 Model)
-        const aiResponse = await env.AI.run("@cf/meta/llama-3-8b-instruct", {
-          prompt: prompt,
-          max_tokens: 1000
+}`
+            }
+          ],
+          max_tokens: 1200
         });
 
         let scriptData;
         try {
-          // Extract JSON string from AI response
-          const jsonStart = aiResponse.response.indexOf('{');
-          const jsonEnd = aiResponse.response.lastIndexOf('}') + 1;
-          const cleanJson = aiResponse.response.substring(jsonStart, jsonEnd);
+          const rawText = aiResponse.response || JSON.stringify(aiResponse);
+          const jsonStart = rawText.indexOf('{');
+          const jsonEnd = rawText.lastIndexOf('}') + 1;
+          const cleanJson = rawText.substring(jsonStart, jsonEnd);
           scriptData = JSON.parse(cleanJson);
         } catch (e) {
           scriptData = {
             steps: [
               {
-                spokenText: `Welcome to de-blaise-tutorials! Let's explore ${topic} in ${subjectName}.`,
+                spokenText: `Welcome to de-blaise-tutorials! Today we will examine ${topic} in ${subjectName}.`,
                 chalkboardAction: `${subjectName}: ${topic}`
+              },
+              {
+                spokenText: `Let's break down the key principles of ${topic} aligned with WAEC/NECO syllabus.`,
+                chalkboardAction: `Key Concept: ${topic}`
               }
             ]
           };
@@ -122,13 +150,13 @@ Respond ONLY with valid JSON in this exact structure:
             success: true,
             topic,
             subjectName,
-            chalkboardScript: scriptData.steps
+            chalkboardScript: scriptData.steps || []
           },
           { headers: corsHeaders }
         );
       }
 
-      // 4. Save Student Progress
+      // 5. Save Student Progress
       if (pathname === "/api/save-progress" && request.method === "POST") {
         const { studentId, topicId, completed } = await request.json();
 
