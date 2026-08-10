@@ -89,96 +89,75 @@ export default {
         );
       }
 
-      // 4. Groq Cloud AI Lesson Note Generator
+      // 4. Cloudflare Native Workers AI Lesson Generator
       if (pathname === "/api/generate-ai-script" && request.method === "POST") {
         const { topic, subjectName } = await request.json();
 
         if (!topic || !subjectName) {
           return Response.json(
-            { success: false, error: "Missing 'topic' or 'subjectName' in request body." },
+            { success: false, error: "Missing 'topic' or 'subjectName' in body." },
             { status: 400, headers: corsHeaders }
           );
         }
 
-        const apiKey = env.GROQ_API_KEY;
-
-        if (!apiKey) {
-          return Response.json(
-            { success: false, error: "GROQ_API_KEY variable is missing in Cloudflare Worker settings." },
-            { status: 500, headers: corsHeaders }
-          );
-        }
-
-        const prompt = `You are a master Senior Secondary School teacher for de-blaise-tutorials preparing students for WAEC and NECO national examinations.
+        const systemPrompt = `You are a Senior Secondary School teacher for de-blaise-tutorials preparing students for WAEC and NECO exams.
 Write a comprehensive, textbook-grade lesson note on "${topic}" under "${subjectName}".
 
 Requirements:
-- Write out actual, detailed educational content so students can copy complete, exhaustive notes directly into their notebooks.
-- Include complete formal definitions, real classifications/types with thorough descriptions, detailed features, fully worked numerical examples or step-by-step case studies, and key WAEC/NECO exam tips.
-- Do NOT use placeholders, generic text, or summaries.
+- Write actual detailed educational content so students can copy complete notes into their exercise books.
+- Include formal definitions, full classifications/types with descriptions, step-by-step worked numerical examples or case studies, and WAEC exam tips. Do NOT use placeholders.
 
-Divide your teaching strictly into 4 steps using the exact tag "===STEP===" as the separator between steps.
+You MUST separate your response into 4 distinct teaching steps using "===STEP===" as the separator.
 
-Format each step strictly like this:
+Format each step strictly as:
+SPOKEN: [Teacher's voiceover summary]
+BOARD:
+[Complete detailed chalkboard notes]`;
 
-SPOKEN: Welcome students! Today we are studying ${topic} under ${subjectName}.
+        const userPrompt = `Teach a complete, textbook-style lesson on "${topic}" under "${subjectName}".
+
+Follow this layout:
+
+SPOKEN: Welcome students! Today we are studying ${topic} in ${subjectName}.
 BOARD:
 SUBJECT: ${subjectName}
 TOPIC: ${topic}
-CLASS: SS1 - SS3 (WAEC/NECO Syllabus)
+CLASS: SS1 - SS3 (WAEC/NECO Standard)
 
 ===STEP===
 
-SPOKEN: Let's begin with the formal textbook definition and foundational concepts.
+SPOKEN: Let's begin with the full formal definition and foundational rules.
 BOARD:
-1. FORMAL DEFINITION & OVERVIEW OF ${topic.toUpperCase()}:
-[Write full, thorough textbook notes here with technical terms explained in detail]
+1. FORMAL DEFINITION & FOUNDATIONAL PRINCIPLES:
+[Write complete, detailed textbook definition and explain key technical terms]
 
 ===STEP===
 
-SPOKEN: Now let's detail the main types, classifications, and key characteristics.
+SPOKEN: Now let's detail the main types, classifications, and key features.
 BOARD:
-2. TYPES, CLASSIFICATIONS & FEATURES:
-- [Type 1 Name]: Detailed explanation and characteristics
-- [Type 2 Name]: Detailed explanation and characteristics
-- [Type 3 Name]: Detailed explanation and characteristics
+2. TYPES & CLASSIFICATIONS:
+- [Type 1 Name]: Full detailed description and characteristics
+- [Type 2 Name]: Full detailed description and characteristics
+- [Type 3 Name]: Full detailed description and characteristics
 
 ===STEP===
 
-SPOKEN: Let's work through a practical examination example or calculation step-by-step.
+SPOKEN: Let's work through a realistic examination example step-by-step.
 BOARD:
-3. WORKED EXAMPLE / PRACTICAL ANALYSIS:
-[Write a complete step-by-step worked calculation, formula application, or realistic case study]`;
+3. WORKED EXAMPLE & EXAM ANALYSIS:
+[Provide actual equations, numbers, steps, or real-world scenario analysis]`;
 
         try {
-          const groqRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-            method: "POST",
-            headers: {
-              "Authorization": `Bearer ${apiKey}`,
-              "Content-Type": "application/json"
-            },
-            body: JSON.stringify({
-              model: "llama-3.3-70b-versatile",
-              messages: [{ role: "user", content: prompt }],
-              temperature: 0.2,
-              max_tokens: 3000
-            })
+          // Call Native Cloudflare Workers AI
+          const aiResponse = await env.AI.run("@cf/meta/llama-3.3-70b-instruct", {
+            messages: [
+              { role: "system", content: systemPrompt },
+              { role: "user", content: userPrompt }
+            ],
+            max_tokens: 2500
           });
 
-          const data = await groqRes.json();
-
-          if (!groqRes.ok || data.error) {
-            console.error("Groq API Error:", JSON.stringify(data));
-            return Response.json(
-              { 
-                success: false, 
-                error: `Groq API Error (${groqRes.status}): ${data.error ? data.error.message : "Request failed"}` 
-              },
-              { status: 500, headers: corsHeaders }
-            );
-          }
-
-          const rawText = data.choices[0].message.content;
+          const rawText = aiResponse.response || "";
           let steps = [];
 
           if (rawText.includes("===STEP===")) {
@@ -212,8 +191,9 @@ BOARD:
           );
 
         } catch (err) {
+          console.error("Workers AI Error:", err);
           return Response.json(
-            { success: false, error: `Execution Error: ${err.message}` },
+            { success: false, error: `Workers AI Execution Error: ${err.message}` },
             { status: 500, headers: corsHeaders }
           );
         }
