@@ -103,33 +103,40 @@ export default {
         let steps = [];
 
         try {
+          const systemPrompt = "You are a master West African secondary school teacher preparing students for WAEC/NECO exams. Output ONLY a valid raw JSON object. Do not wrap in markdown or backticks.";
+          const userPrompt = `Create a detailed, comprehensive 5-step lesson for the topic "${topic}" in "${subjectName}" aligned with the WAEC/NECO SS1-SS3 syllabus.
+
+The lesson MUST cover:
+1. Introduction & Formal Definition
+2. Types, Classifications, or Key Components
+3. Step-by-Step Worked Example or Detailed Explanation
+4. Common Exam Pitfalls & Key Formulas/Rules
+5. Quick Summary & WAEC Exam Tip
+
+Return EXACTLY a JSON object with this key structure:
+{
+  "steps": [
+    {
+      "spokenText": "Detailed explanation written in clear, engaging simple teacher tone explaining definitions, concepts, and steps...",
+      "chalkboardAction": "Clear chalkboard notes, formulas, bullet points, or worked mathematical steps..."
+    }
+  ]
+}`;
+
           // Call Cloudflare Workers AI (LLaMA 3 Chat Model)
           const aiResponse = await env.AI.run("@cf/meta/llama-3-8b-instruct", {
             messages: [
-              {
-                role: "system",
-                content: "You are an expert WAEC/NECO teacher. Output ONLY raw JSON. Do not include markdown formatting, backticks, or intro text."
-              },
-              {
-                role: "user",
-                content: `Create a 3-step chalkboard lesson for the topic "${topic}" in "${subjectName}".
-Return EXACTLY a JSON object with a "steps" array containing objects with "spokenText" and "chalkboardAction".
-Example format:
-{
-  "steps": [
-    {"spokenText": "Welcome to class...", "chalkboardAction": "Topic: ${topic}"}
-  ]
-}`
-              }
+              { role: "system", content: systemPrompt },
+              { role: "user", content: userPrompt }
             ],
-            max_tokens: 1000
+            max_tokens: 2500
           });
 
           // Extract text response safely
           const rawText = aiResponse.response || (typeof aiResponse === "string" ? aiResponse : JSON.stringify(aiResponse));
           
-          // Clean out markdown code blocks if LLaMA added them
-          const cleanText = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
+          // Clean markdown formatting like ```json or ```
+          const cleanText = rawText.replace(/```json/gi, '').replace(/```/g, '').trim();
           
           const jsonStart = cleanText.indexOf('{');
           const jsonEnd = cleanText.lastIndexOf('}') + 1;
@@ -144,20 +151,28 @@ Example format:
           console.error("AI Parsing Error:", e);
         }
 
-        // Guaranteed fallback if AI output fails or parses empty
+        // Detailed 5-Step Fallback Generator if AI parsing fails
         if (!steps || steps.length === 0) {
           steps = [
             {
-              spokenText: `Welcome to de-blaise-tutorials! Today we are studying ${topic} under ${subjectName}.`,
-              chalkboardAction: `Subject: ${subjectName}\nTopic: ${topic}`
+              spokenText: `Welcome to class! Today we are diving deep into ${topic} under ${subjectName}. This is a crucial topic for your WAEC and NECO examinations.`,
+              chalkboardAction: `SUBJECT: ${subjectName}\nTOPIC: ${topic}\nLEVEL: SS1 - SS3 Senior Secondary`
             },
             {
-              spokenText: `In WAEC and NECO examinations, questions on ${topic} focus on core principles and definitions.`,
-              chalkboardAction: `Key Focus: ${topic} Principles`
+              spokenText: `Let's start with the fundamental definition. ${topic} involves core rules and principles that form the foundation for standard examination questions.`,
+              chalkboardAction: `1. DEFINITION & CORE PRINCIPLES:\n- Key concept of ${topic}\n- Fundamental Laws & Standards`
             },
             {
-              spokenText: `Review these concepts carefully and proceed to practice past exam questions in the CBT engine.`,
-              chalkboardAction: `Summary: ${topic} Complete`
+              spokenText: `Now let's break down the types and classifications you must know for your theoretical and objective exams.`,
+              chalkboardAction: `2. CLASSIFICATION & TYPES:\n- Primary Features & Variations\n- Key Components`
+            },
+            {
+              spokenText: `Pay close attention to this worked example. In exams, markers look for clear step-by-step logic and correct application of formulas or concepts.`,
+              chalkboardAction: `3. WORKED EXAMPLE / APPLICATION:\nStep 1: Identify given terms\nStep 2: Apply core rule\nStep 3: State final conclusion`
+            },
+            {
+              spokenText: `To round up, remember that WAEC often tests common student mistakes in this topic. Always double check your units and definitions!`,
+              chalkboardAction: `4. WAEC/NECO EXAM SUMMARY:\n- Review formulas & definitions\n- Avoid common calculation errors\n- Practice past questions on CBT Engine`
             }
           ];
         }

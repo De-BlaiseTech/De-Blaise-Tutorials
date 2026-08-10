@@ -12,7 +12,7 @@
     /* Top Bar Navigation */
     .top-nav {
       display: flex;
-      justify: space-between;
+      justify-content: space-between;
       align-items: center;
       background: #1e293b;
       padding: 10px 16px;
@@ -46,6 +46,19 @@
     }
     select:disabled { opacity: 0.6; cursor: not-allowed; }
     
+    /* Audio & Auto-Teacher Toggle Bar */
+    .teacher-controls {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: #0f172a;
+      padding: 10px 14px;
+      border-radius: 8px;
+      border: 1px solid #334155;
+      margin-bottom: 12px;
+    }
+    .toggle-label { font-size: 0.85rem; color: #e2e8f0; display: flex; align-items: center; gap: 8px; cursor: pointer; }
+
     /* Chalkboard Styling */
     .chalkboard {
       background: #0f172a;
@@ -59,7 +72,7 @@
     .chalk-text { font-family: 'Courier New', Courier, monospace; font-size: 1.15rem; color: #f1f5f9; white-space: pre-wrap; line-height: 1.6; }
     .teacher-speech { background: #0284c7; color: #ffffff; padding: 12px; border-radius: 8px; margin-bottom: 15px; font-weight: 500; }
     
-    /* Services Banner Card */
+    /* Agency Services Banner Card */
     .agency-card {
       background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
       border: 1px solid #334155;
@@ -90,10 +103,13 @@
       cursor: pointer; font-weight: bold; text-decoration: none; display: inline-block; transition: 0.2s;
     }
     button:hover, .quiz-btn:hover { background: #1d4ed8; }
+    button:disabled { background: #475569; cursor: not-allowed; }
     .ai-btn { background: #9333ea; }
     .ai-btn:hover { background: #7e22ce; }
     .quiz-btn { background: #16a34a; }
     .quiz-btn:hover { background: #15803d; }
+    .secondary-btn { background: #475569; }
+    .secondary-btn:hover { background: #334155; }
 
     /* Footer */
     footer {
@@ -138,6 +154,16 @@
         </select>
       </div>
 
+      <!-- Auto-Teacher & Voiceover Settings -->
+      <div class="teacher-controls">
+        <label class="toggle-label">
+          <input type="checkbox" id="voice-toggle" checked> 🔊 Voiceover
+        </label>
+        <label class="toggle-label">
+          <input type="checkbox" id="autoplay-toggle" checked> 🤖 Auto-Play (Auto Teacher)
+        </label>
+      </div>
+
       <div class="btn-group">
         <button class="ai-btn" onclick="generateAiLesson()">✨ Generate AI Lesson</button>
       </div>
@@ -150,6 +176,7 @@
     </div>
 
     <div class="btn-group">
+      <button id="prev-step-btn" class="secondary-btn" onclick="prevStep()" disabled>⬅ Previous</button>
       <button id="next-step-btn" onclick="nextStep()" disabled>Next Step ➔</button>
       <a id="quiz-link" href="https://cbt.de-blaisetechnologies.com.ng" target="_blank" class="quiz-btn" style="display: none;">📝 Practice CBT Test</a>
     </div>
@@ -170,8 +197,10 @@
   <script>
     let currentScript = [];
     let currentStep = 0;
+    let autoPlayTimer = null;
+    const synth = window.speechSynthesis;
 
-    // Load All WAEC/NECO Subjects into Dropdown
+    // Load All WAEC/NECO Subjects
     async function loadSubjects() {
       try {
         const res = await fetch('/api/subjects');
@@ -224,8 +253,16 @@
       }
     }
 
+    // Stop all audio & timers
+    function stopTeaching() {
+      if (synth) synth.cancel();
+      if (autoPlayTimer) clearTimeout(autoPlayTimer);
+    }
+
     // Generate AI Lesson using Cloudflare AI
     async function generateAiLesson() {
+      stopTeaching();
+
       const subjectSelect = document.getElementById('subject-select');
       const topicSelect = document.getElementById('topic-select');
 
@@ -238,6 +275,7 @@
       document.getElementById('teacher-speech').innerText = `🤖 De-Blaise AI is generating lesson for "${topic}"...`;
       document.getElementById('chalk-board').innerText = "";
       document.getElementById('next-step-btn').disabled = true;
+      document.getElementById('prev-step-btn').disabled = true;
 
       try {
         const res = await fetch('/api/generate-ai-script', {
@@ -248,11 +286,10 @@
 
         const json = await res.json();
 
-        if (json.success && json.chalkboardScript) {
+        if (json.success && json.chalkboardScript && json.chalkboardScript.length > 0) {
           currentScript = json.chalkboardScript;
           currentStep = 0;
           renderStep();
-          document.getElementById('next-step-btn').disabled = false;
           
           const quizBtn = document.getElementById('quiz-link');
           quizBtn.href = `https://cbt.de-blaisetechnologies.com.ng`;
@@ -266,10 +303,50 @@
     }
 
     function renderStep() {
+      stopTeaching();
+
       if (currentStep < currentScript.length) {
         const step = currentScript[currentStep];
+        
+        // Render UI
         document.getElementById('teacher-speech').innerText = step.spokenText;
-        document.getElementById('chalk-board').innerText += `\n> ${step.chalkboardAction}\n`;
+        
+        if (currentStep === 0) {
+          document.getElementById('chalk-board').innerText = `> ${step.chalkboardAction}\n`;
+        } else {
+          document.getElementById('chalk-board').innerText += `\n> ${step.chalkboardAction}\n`;
+        }
+
+        // Enable / Disable buttons
+        document.getElementById('prev-step-btn').disabled = (currentStep === 0);
+        document.getElementById('next-step-btn').disabled = (currentStep === currentScript.length - 1);
+
+        // Handle Speech & Auto-Teacher Playback
+        const voiceEnabled = document.getElementById('voice-toggle').checked;
+        const autoPlayEnabled = document.getElementById('autoplay-toggle').checked;
+
+        if (voiceEnabled && synth) {
+          const utterance = new SpeechSynthesisUtterance(step.spokenText);
+          utterance.rate = 0.95; // Natural teacher pace
+
+          utterance.onend = () => {
+            if (autoPlayEnabled && currentStep < currentScript.length - 1) {
+              autoPlayTimer = setTimeout(() => {
+                currentStep++;
+                renderStep();
+              }, 2000); // Wait 2 seconds after speech before auto-advancing
+            }
+          };
+
+          synth.speak(utterance);
+        } else if (autoPlayEnabled && currentStep < currentScript.length - 1) {
+          // If voice is muted, wait 6 seconds based on text length then auto-advance
+          autoPlayTimer = setTimeout(() => {
+            currentStep++;
+            renderStep();
+          }, 6000);
+        }
+
       } else {
         document.getElementById('teacher-speech').innerText = "Lesson complete! Click below to practice the CBT exam.";
         document.getElementById('next-step-btn').disabled = true;
@@ -277,8 +354,17 @@
     }
 
     function nextStep() {
-      currentStep++;
-      renderStep();
+      if (currentStep < currentScript.length - 1) {
+        currentStep++;
+        renderStep();
+      }
+    }
+
+    function prevStep() {
+      if (currentStep > 0) {
+        currentStep--;
+        renderStep();
+      }
     }
 
     // Initialize on Page Load
