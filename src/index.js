@@ -89,7 +89,7 @@ export default {
         );
       }
 
-      // 4. Gemini API Lesson Generator (Supports Auth Keys)
+      // 4. Gemini API Lesson Generator (Comprehensive Textbook Notes)
       if (pathname === "/api/generate-ai-script" && request.method === "POST") {
         const { topic, subjectName } = await request.json();
 
@@ -104,84 +104,79 @@ export default {
 
         if (!apiKey) {
           return Response.json(
-            { success: false, error: "GEMINI_API_KEY missing in Cloudflare variables." },
+            { success: false, error: "GEMINI_API_KEY is missing from Cloudflare environment variables." },
             { status: 500, headers: corsHeaders }
           );
         }
 
-        const prompt = `You are an expert Senior Secondary School teacher for de-blaise-tutorials preparing students for WAEC and NECO exams.
-Write a comprehensive, textbook-grade lesson note on the topic "${topic}" under "${subjectName}".
+        const prompt = `You are a Senior Secondary School teacher writing a complete, detailed textbook lesson for WAEC and NECO students on "${topic}" under "${subjectName}".
 
-Requirements:
-- Write out actual, detailed educational content so students can copy complete notes into their notebooks.
-- Include formal definitions, real classifications/types, worked numerical examples or case studies, formulas, and WAEC exam tips. Do NOT use placeholders.
+Write comprehensive, exhaustive notes that students can directly copy into their exercise books. Do NOT summarize or use generic statements.
 
-Divide your teaching strictly into 4 steps using the tag "===STEP===" between each step.
+Include:
+1. Complete, formal textbook definition of ${topic} with detailed explanation of key technical terms.
+2. Complete list of all types, classifications, or forms with thorough descriptions for each.
+3. Detailed features, advantages, disadvantages, or key rules.
+4. A full practical worked example, step-by-step case study, or mathematical calculation.
+5. Key WAEC/NECO examination tips and common mistakes to avoid.
+
+Divide your output strictly into 4 steps using "===STEP===" as the separator.
 
 Format each step like this:
 
-SPOKEN: [Teacher spoken explanation for lesson title]
+SPOKEN: Welcome students! Today we are studying ${topic} in ${subjectName}.
 BOARD:
 SUBJECT: ${subjectName}
 TOPIC: ${topic}
-CLASS: SS1 - SS3 (WAEC/NECO Standard)
+CLASS: SS1 - SS3 (WAEC/NECO Syllabus)
 
 ===STEP===
 
-SPOKEN: [Teacher spoken explanation for definitions and core concepts]
+SPOKEN: Let's begin with the formal definition and fundamental concepts.
 BOARD:
-1. FORMAL DEFINITION & FOUNDATIONAL PRINCIPLES:
-[Write the full, actual textbook definition and explain technical terms in detail]
+1. DEFINITION & OVERVIEW OF ${topic.toUpperCase()}:
+[Write full, thorough textbook notes here]
 
 ===STEP===
 
-SPOKEN: [Teacher spoken explanation for types and characteristics]
+SPOKEN: Now let's detail the types, classifications, and features.
 BOARD:
 2. TYPES & CLASSIFICATIONS:
-- [Type 1 Name]: Detailed explanation
-- [Type 2 Name]: Detailed explanation
-- [Type 3 Name]: Detailed explanation
+[Write complete lists with detailed descriptions here]
 
 ===STEP===
 
-SPOKEN: [Teacher spoken explanation for worked example or case study]
+SPOKEN: Let's work through an examination example step-by-step.
 BOARD:
-3. WORKED EXAMPLE / PRACTICAL APPLICATION:
-[Provide actual equations, numbers, steps, or real-world analysis]`;
+3. WORKED EXAMPLE & EXAM ANALYSIS:
+[Write full step-by-step worked calculation or case study here]`;
 
         try {
-          // Supports both Auth Key headers and legacy URL parameters
-          const isAuthKey = apiKey.startsWith("AQ.");
-          const requestUrl = isAuthKey 
-            ? "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
-            : `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+          // Gemini API Call (Supports key as URL parameter)
+          const endpointUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
 
-          const requestHeaders = {
-            "Content-Type": "application/json"
-          };
-
-          if (isAuthKey) {
-            requestHeaders["Authorization"] = `Bearer ${apiKey}`;
-          }
-
-          const geminiRes = await fetch(requestUrl, {
+          const geminiRes = await fetch(endpointUrl, {
             method: "POST",
-            headers: requestHeaders,
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               contents: [{ parts: [{ text: prompt }] }],
               generationConfig: {
                 temperature: 0.2,
-                maxOutputTokens: 2500
+                maxOutputTokens: 3000
               }
             })
           });
 
           const data = await geminiRes.json();
 
+          // If Google returns an error response, report it directly!
           if (!geminiRes.ok || data.error) {
-            console.error("Gemini API Error Response:", JSON.stringify(data));
+            console.error("Gemini API Error:", JSON.stringify(data));
             return Response.json(
-              { success: false, error: `Gemini API Error: ${data.error ? data.error.message : geminiRes.statusText}` },
+              { 
+                success: false, 
+                error: `Google API Error (${geminiRes.status}): ${data.error ? data.error.message : "Authentication or request failed"}` 
+              },
               { status: 500, headers: corsHeaders }
             );
           }
@@ -221,7 +216,7 @@ BOARD:
 
         } catch (err) {
           return Response.json(
-            { success: false, error: `Execution Error: ${err.message}` },
+            { success: false, error: `Worker Execution Error: ${err.message}` },
             { status: 500, headers: corsHeaders }
           );
         }
